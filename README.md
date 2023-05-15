@@ -7,7 +7,8 @@ This extension lets you create, manage, and share presets for models, so you don
 
 It also downloads the thumbnail preview image for your model from Civitai as well as the model's trigger words so you can apply or unapply them as needed. It can store all generation data that is output by txt2img and img2img when you generate such as prompt, negative prompt, cfg_scale, resolution, sampler, clip skip, steps, etc. 
 
-The presets are saved to a small json file, so they will be easy to share for model creators or users. The json format will also make it easy to integrate into websites or other apps or extensions with very little effort.
+The presets are saved to a small json file, so they will be easy to share for model creators or users [(see how to share your presets in your civitai model description below)](#get-preset-sharing-text-for-civitai-description-experimental)
+. The json format will also make it easy to integrate into websites or other apps or extensions with very little effort.
 
 If you find this useful, please consider leaving me a tip on:<br><br> <a href="https://ko-fi.com/rifewithkaiju" target="_blank" rel="noopener noreferrer">
   <img src="https://i.imgur.com/iFQKhei.png" alt="kofismall">
@@ -62,7 +63,8 @@ Click this to retrieve the model locally. It will automatically attempt to searc
 
 ##### Download and Overwrite Model Info
 
-This will attempt to download model information from Civitai. It attempts to search Civitai for the model. If it finds it, it will download the model thumbnail and a list of trigger words for the model. This will overwrite only these settings if you have already downloaded this info. It won't overwrite your presets. The model thumbnail will also be used in the Checkpoints tab for networks in the txt2img and img2img tabs.
+This will attempt to download model information from Civitai. If the model information is found, it will download the model thumbnail and a list of trigger words for the model. If the model uploader added presets to the model description it will add those as well. The model thumbnail will also be used in the Checkpoints tab for networks in the txt2img and img2img tabs.  If you already have a model thumbnail set, it will not overwrite it.  
+<br>:warning: **<span style="color:red;">This will overwrite your model url and trigger words.  If the model uploader added presets to the model description it will overwrite your presets as well</span>**.
 
 ##### Thumbnail Image
 
@@ -137,11 +139,16 @@ Renames the currently selected preset to the name in "Current Preset Name".
 
 <br>
 
-### Output
+### Output Section
 
-![PresetManagerOutput](https://github.com/rifeWithKaiju/model_preset_manager/assets/111892089/4a11fa62-ffcf-4361-8655-12d9557eaac8)
+![ModelPresetManagerOutput2](https://github.com/rifeWithKaiju/model_preset_manager/assets/111892089/14118ceb-4add-4010-a491-7aecd5883efc)
 
+#### Output Section
 This just outputs simple info like whether your preset was successfully renamed, etc for some operations.
+
+#### Get preset sharing text for Civitai description (EXPERIMENTAL)
+This allows you to easily share model presets along with your models on Civitai.
+Click this button and copy the text from the output box and paste it into your Civitai model description to share the best presets for your model. When you paste it into your Civitai model description, it will automatically convert the model url to a link, make sure to unlink it before saving changes.  When someone downloads your model info, it will automatically download all the presets.
 
 <br>
 
@@ -165,3 +172,4 @@ You can also separate them on different lines, like this:
 
 ### How to add a model presets file someone shared online
 Simply move the preset file to the folder that opens when you press the "Reveal Presets File" directory or manually save it to `/extensions/model_preset_manager/scripts/model presets.`
+If the presets are shared in the Civitai model description, they should automatically download.
