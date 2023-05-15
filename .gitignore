@@ -1,0 +1,10 @@
+*
+!.gitignore
+!install.py
+!javascript/
+!javascript/rifemodelpresets.js
+!scripts/
+!scripts/interface.py
+!scripts/main.py
+!scripts/model presets/
+!scripts/model presets/Put model presets here.txt

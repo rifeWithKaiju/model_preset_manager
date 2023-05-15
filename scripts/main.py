@@ -106,7 +106,7 @@ def remove_hash_and_whitespace(s, remove_extension = False):
     return cleaned_string
 
 def get_thumbnail_path(modelName):
-    return os.path.join("models", "Stable-diffusion", modelName + ".png")
+    return os.path.join("models", "Stable-diffusion", modelName + "preview.png")
 
 def download_thumbnail(image_url, modelName):
     response = requests.get(image_url)
