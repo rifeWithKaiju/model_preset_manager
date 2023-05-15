@@ -29,7 +29,7 @@ https://github.com/rifeWithKaiju/model_preset_manager
 in **URL for extension's git repository** and click **Install**.  Then go to the **Settings** tab and click **Reload UI**
 
 #### Get your model info
-Go to the **Model Preset Manager** tab, and click on **Retrieve Local Model Info**. This will be slow the first time as it searches for the model info on Civitai. The next time you do this it should be near instant.
+Go to the **Model Preset Manager** tab, and click on **Retrieve Local Model Info**.
 
 #### Create a preset
 To input preset data you can either:
