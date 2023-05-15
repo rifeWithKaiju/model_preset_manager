@@ -15,27 +15,10 @@ from modules import script_callbacks
 from modules import shared
 from PIL import Image
 from pathlib import Path
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
 from typing import Any
 
-
-CHROMEDRIVER_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "chromedriver", "chromedriver.exe")
-os.environ["PATH"] += os.pathsep + CHROMEDRIVER_DIRECTORY
-
-IMG_CLASS = 'mantine-7aj0so'
-MODEL_CLASS = "mantine-x8rksy"
-TRIGGER_WORD_CONTAINER_XPATH = "//div[contains(@id, '-panel-version-details')]"
-TRIGGER_WORD_SEARCH_PATTERN = r'<div class="mantine-Group-root mantine-i72d0e">\s*(.*?)<svg'
-
-CIVITAI_URL_BASE = "https://civitai.com"
-
+CIVITAI_MODEL_INFO_BY_HASH_URL = 'https://civitai.com/api/v1/model-versions/by-hash/'
+CIVITAI_MODEL_PAGE_BY_ID_URL = 'https://civitai.com/models/'
 
 def get_model_info_file_path(model_hash):
     current_directory = os.path.dirname(__file__)
@@ -87,107 +70,18 @@ def save_model_info(short_hash, model_info):
     with open(model_info_file_path, "w") as file:
         json.dump(model_info, file, indent=4)
 
-def get_model_url_and_hash_from_filename(model_filename):
-    short_hash, model_info = get_model_hash_and_info_from_model_filename(model_filename)
+def get_model_url_trigger_words_and_first_image_url_from_hash(short_hash):
+    response = requests.get(f"{CIVITAI_MODEL_INFO_BY_HASH_URL}{short_hash}")
+    data = response.json()
 
-    # If the hash is not present in the database, retrieve the URL and store it in the database under the hash
-    model_url = model_info.get("url") or find_citivai_model_url_from_hash(short_hash) or None
-    model_info['url'] = model_url
-    
-    global triggerWordChoices
-    model_info["trigger_words"] = triggerWordChoices
+    # The get() method returns None if the key does not exist.
+    trigger_words = data.get("trainedWords", [])
+    images = data.get("images", [{}])
+    model_url = f'{CIVITAI_MODEL_PAGE_BY_ID_URL}{data.get("modelId", "")}'
 
-    # Write the updated model_info JSON
-    save_model_info(short_hash, model_info)
+    first_image_url = images[0].get("url", None)
 
-    # Return the model URL (or None if not found) and the short hash
-    return model_url, short_hash
-
-def get_html_with_selenium(url, matching_class, timeout=10, max_retries=3, sleep_time=2):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--log-level=SEVERE")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-    
-    # prevent a ton of disregarded console warnings
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
-    
-    chromedriver_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'chromedriver')
-    os.environ["PATH"] += os.pathsep + chromedriver_directory
-
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.set_script_timeout(timeout)
-
-    retries = 0
-    element_found = False
-
-    print(f"checking url: {url}")
-    while retries < max_retries:
-        driver.get(url)
-        time.sleep(sleep_time)
-
-        try:
-            element = driver.find_element_by_class_name(matching_class)
-            element_found = True
-            break
-        except NoSuchElementException:
-            retries += 1
-            print(f"Element not found, retrying... ({retries}/{max_retries})")
-
-    if not element_found:
-        print("Failed to find the element after maximum retries")
-
-    html = driver.page_source
-    driver.quit()
-    return html
-    
-def get_trigger_words_with_selenium(url, timeout=10, max_retries=3, sleep_time=2):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--log-level=SEVERE")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
-
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
-
-    chromedriver_directory = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', 'chromedriver')
-    os.environ["PATH"] += os.pathsep + chromedriver_directory
-
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.set_script_timeout(timeout)
-
-    retries = 0
-    outer_element_found = False
-    print(f"checking url: {url}")
-    while retries < max_retries:
-        driver.get(url)
-        time.sleep(sleep_time)
-
-        try:
-            outer_element = driver.find_element_by_xpath(TRIGGER_WORD_CONTAINER_XPATH)
-            if outer_element:
-                outer_element_found = True
-                break
-        except NoSuchElementException:
-            retries += 1
-            print(f"Outer element not found, retrying... ({retries}/{max_retries})")
-
-    if not outer_element_found:
-        print("Failed to find the outer trigger word element after maximum retries")
-            
-        html = driver.page_source
-        driver.quit()
-        
-        return html, []
-        
-        
-    inner_html = outer_element.get_attribute("innerHTML")
-
-    pattern = TRIGGER_WORD_SEARCH_PATTERN
-    trigger_words = re.findall(pattern, inner_html, re.DOTALL)
-    
-    driver.quit()
-    
-    return trigger_words  # Return the list of inner elements
+    return model_url, trigger_words, first_image_url
 
 def get_short_hash_from_filename(filename):
     match = re.search(r'\[(.*?)\]', filename)
@@ -200,43 +94,6 @@ def get_short_hash_from_filename(filename):
         for chunk in iter(lambda: f.read(4096), b''):
             sha256.update(chunk)
     return sha256.hexdigest()[:10]
-
-def find_citivai_model_url_from_hash(short_hash):
-    url = f'{CIVITAI_URL_BASE}/?query={short_hash}'
-    search_results_page = get_html_with_selenium(url, MODEL_CLASS)
-    return find_model_url_on_search_page(search_results_page)
-
-def find_model_url_on_search_page(html):
-    anchor_start = html.find(f'<a class="{MODEL_CLASS}"')
-
-    if anchor_start == -1:
-        return None
-
-    href_start = html.find('href="', anchor_start)
-    href_end = html.find('"', href_start + 6)
-
-    if href_start != -1 and href_end != -1:
-        return f'{CIVITAI_URL_BASE}{html[href_start + 6:href_end]}'
-
-    return None
-
-
-def extract_image_url(html, modelName, short_hash):
-    img_start = html.find(f'<img class="{IMG_CLASS}"')
-
-    if img_start == -1:
-        return None
-
-    src_start = html.find('src="', img_start)
-    src_end = html.find('"', src_start + 5)
-
-    if src_start != -1 and src_end != -1:
-        image_url = html[src_start + 5:src_end]
-        download_thumbnail(image_url, modelName)
-
-        return image_url
-
-    return None
 
 def remove_hash_and_whitespace(s, remove_extension = False):
     # Remove any whitespace and hash surrounded by square brackets
@@ -278,12 +135,10 @@ def save_thumbnail_from_np_array(current_model, image):
     thumbnail_path = get_thumbnail_path(current_model)
     image.save(thumbnail_path)
     
-def get_model_thumbnail(url, short_hash, local, modelName):
+def get_model_thumbnail(image_url, short_hash, local, modelName):
     thumbnail_path = get_thumbnail_path(modelName)
 
     if not local or not os.path.exists(thumbnail_path):
-        html = get_html_with_selenium(url, IMG_CLASS)
-        image_url = extract_image_url(html, modelName, short_hash)
         if image_url:
             download_thumbnail(image_url, modelName)
 
@@ -307,8 +162,6 @@ def update_default_preset(model_info):
 
     return model_info
 
-
-
 def get_default_preset(model_info):
     default_preset_name = model_info.get("default_preset", "default")
     
@@ -326,13 +179,13 @@ def get_default_preset(model_info):
         return "default", ""
 
 
-def download_model_info(current_generation_data):
+def download_model_info():
     model_filename = current_model_filename()
-    model_url, short_hash = get_model_url_and_hash_from_filename(model_filename)
-    trigger_words = []
-    if model_url:
-        model_thumbnail = get_model_thumbnail(model_url, short_hash, False, remove_hash_and_whitespace(model_filename, True))
-        trigger_words = get_trigger_words_with_selenium(model_url)
+    short_hash, model_info = get_model_hash_and_info_from_model_filename(model_filename)
+    model_url, trigger_words, first_image_url = get_model_url_trigger_words_and_first_image_url_from_hash(short_hash)
+    
+    if first_image_url:
+        model_thumbnail = get_model_thumbnail(first_image_url, short_hash, False, remove_hash_and_whitespace(model_filename, True))
     
     model_info = get_model_info_from_model_hash(short_hash)    
     
@@ -343,6 +196,7 @@ def download_model_info(current_generation_data):
     global triggerWordChoices
     triggerWordChoices = trigger_words
     set_trigger_words(model_filename)
+    set_model_url(model_filename, model_url)
     return model_filename, model_url, model_thumbnail, model_generation_data_update_return(current_generation_data, preset_name), gr.CheckboxGroup.update(choices = trigger_words), gr.Dropdown.update(choices = list(presets.keys()), value = preset_name), preset_name, short_hash
 
 def model_generation_data_update_return(current_generation_data, preset_name):
@@ -363,7 +217,7 @@ def retrieve_model_info_from_disk(current_generation_data):
         model_url = model_info['url']
 
         if model_url:
-            model_thumbnail = get_model_thumbnail(model_url, short_hash, True, remove_hash_and_whitespace(model_filename, True))
+            model_thumbnail = get_model_thumbnail("", short_hash, True, remove_hash_and_whitespace(model_filename, True))
             
             preset_name, current_generation_data = get_default_preset(model_info)
             presets = model_info.setdefault('presets', {"default": ""})
@@ -374,12 +228,12 @@ def retrieve_model_info_from_disk(current_generation_data):
             return model_filename, model_url, model_thumbnail, model_generation_data_update_return(current_generation_data, preset_name), gr.CheckboxGroup.update(choices = trigger_words), gr.Dropdown.update(choices = list(presets.keys()), value = preset_name), preset_name, short_hash
         else:
             presets = model_info.setdefault('presets', {"default": ""})
-            return download_model_info(current_generation_data)
+            return download_model_info()
 
     else:
         # Handle the case when the model is not found in the data structure
         presets = model_info.setdefault('presets', {"default": ""})
-        return download_model_info(current_generation_data)
+        return download_model_info()
 
 def set_model_info(model_filename, label, info):
     short_hash, model_info = get_model_hash_and_info_from_model_filename(model_filename)    
