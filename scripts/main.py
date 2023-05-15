@@ -106,9 +106,12 @@ def remove_hash_and_whitespace(s, remove_extension = False):
     return cleaned_string
 
 def get_thumbnail_path(modelName):
-    return os.path.join("models", "Stable-diffusion", modelName + "preview.png")
+    return os.path.join("models", "Stable-diffusion", modelName + ".png")
 
 def download_thumbnail(image_url, modelName):
+    thumbnail_path = get_thumbnail_path(modelName)
+    if os.path.exists(thumbnail_path):
+        return
     response = requests.get(image_url)
     response.raise_for_status()
 
@@ -117,7 +120,6 @@ def download_thumbnail(image_url, modelName):
     img.thumbnail((300, 300))
     
     # Save the thumbnail
-    thumbnail_path = get_thumbnail_path(modelName)
     img.save(thumbnail_path)
     
 def save_thumbnail_from_np_array(current_model, image):
