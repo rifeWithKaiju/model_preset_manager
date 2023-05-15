@@ -19,6 +19,8 @@ from typing import Any
 
 CIVITAI_MODEL_INFO_BY_HASH_URL = 'https://civitai.com/api/v1/model-versions/by-hash/'
 CIVITAI_MODEL_PAGE_BY_ID_URL = 'https://civitai.com/models/'
+CIVITAI_MODEL_DESCRIPTION_TAG = 'mantine-TypographyStylesProvider-root mantine-dfvxn9'
+CIVITAI_MODEL_DESCRIPTION_PRESET_PREFIX = '###ModelPresets###'
 
 def get_model_info_file_path(model_hash):
     current_directory = os.path.dirname(__file__)
@@ -105,6 +107,43 @@ def remove_hash_and_whitespace(s, remove_extension = False):
     
     return cleaned_string
 
+def get_model_presets_from_civitai_model_url(model_url):   
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    model_page_html = requests.get(model_url, headers=headers).text
+
+    data_start_index = model_page_html.find(CIVITAI_MODEL_DESCRIPTION_TAG)
+    if data_start_index == -1:
+        return None
+
+    model_page_html = model_page_html[data_start_index + len(CIVITAI_MODEL_DESCRIPTION_TAG):]
+    
+    preset_start_index = model_page_html.find(CIVITAI_MODEL_DESCRIPTION_PRESET_PREFIX)
+    if preset_start_index == -1:
+        return None
+    else:
+        preset_start_index += len(CIVITAI_MODEL_DESCRIPTION_PRESET_PREFIX)
+    
+    opened_braces = 0
+    json_start_index = -1
+    for i in range(preset_start_index, len(model_page_html)):
+        if model_page_html[i] == '{':
+            if opened_braces == 0:
+                json_start_index = i
+            opened_braces += 1
+        elif model_page_html[i] == '}':
+            opened_braces -= 1
+            if opened_braces == 0:
+                try:
+                    possible_json_str = model_page_html[json_start_index:i + 1]
+                    json_obj = json.loads(possible_json_str)
+                    return json_obj
+                except json.JSONDecodeError:
+                    pass
+    return None
+
+
+
+
 def get_thumbnail_path(modelName):
     return os.path.join("models", "Stable-diffusion", modelName + ".png")
 
@@ -180,25 +219,35 @@ def get_default_preset(model_info):
     else:
         return "default", ""
 
+def validate_model_info(model_info):
+    required_keys = ["url", "default_preset", "trigger_words", "presets"]
+    return model_info and all(key in model_info for key in required_keys)
 
 def download_model_info():
     model_filename = current_model_filename()
     short_hash, model_info = get_model_hash_and_info_from_model_filename(model_filename)
     model_url, trigger_words, first_image_url = get_model_url_trigger_words_and_first_image_url_from_hash(short_hash)
+    full_presets_file =  get_model_presets_from_civitai_model_url(model_url)
+    
     
     if first_image_url:
         model_thumbnail = get_model_thumbnail(first_image_url, short_hash, False, remove_hash_and_whitespace(model_filename, True))
     
-    model_info = get_model_info_from_model_hash(short_hash)    
+    model_info = get_model_info_from_model_hash(short_hash)   
     
-    preset_name, current_generation_data = get_default_preset(model_info)
-        
-    presets = model_info.get("presets",{})
-                  
     global triggerWordChoices
     triggerWordChoices = trigger_words
-    set_trigger_words(model_filename)
-    set_model_url(model_filename, model_url)
+    if validate_model_info(full_presets_file):
+        model_info = full_presets_file
+        triggerWordChoices = trigger_words = model_info.get("trigger_words", [])
+        save_model_info(short_hash, model_info)
+    else:            
+        set_trigger_words(model_filename)
+        set_model_url(model_filename, model_url) 
+           
+    preset_name, current_generation_data = get_default_preset(model_info)        
+    presets = model_info.get("presets",{})
+        
     return model_filename, model_url, model_thumbnail, model_generation_data_update_return(current_generation_data, preset_name), gr.CheckboxGroup.update(choices = trigger_words), gr.Dropdown.update(choices = list(presets.keys()), value = preset_name), preset_name, short_hash
 
 def model_generation_data_update_return(current_generation_data, preset_name):
@@ -360,6 +409,10 @@ def reveal_presets_file_in_explorer(model_hash):
     explorer_path = os.path.join(os.environ["WINDIR"], "explorer.exe")
     explorer_command = f'"{explorer_path}" /e,/select,"{model_info_file_path}"'
     subprocess.run(explorer_command, shell=True)
+    
+def get_civitai_preset_sharing_text():
+    short_hash, model_info = get_model_hash_and_info_from_current_model()
+    return f"###ModelPresets###\n{json.dumps(model_info)}"
 
 def get_template_generation_data(includeExamplePrompt):
     prompt = "{Your Prompt Here}\n" if includeExamplePrompt else ""
@@ -436,7 +489,10 @@ def on_ui_tabs():
                                         gr.Markdown('<div style="height: 10px;"></div>')
                          
                 with gr.Row():
-                    output_textbox = gr.Textbox(interactive=False, label="Output")
+                    with gr.Column(scale = 4):
+                        output_textbox = gr.Textbox(interactive=False, label="Output").style(show_copy_button=True)
+                    with gr.Column(scale = 1):
+                        get_civitai_preset_text = gr.Button("Get preset sharing text for Civitai description")
                     with gr.Column():
                         pass
               
@@ -448,7 +504,6 @@ def on_ui_tabs():
         # Update the preset name textbox when a preset is selected in the dropdown
         preset_dropdown.change(fn=update_current_preset, inputs=[preset_dropdown], outputs=[preset_name_textbox, model_generation_data], show_progress=False)
                         
-       
         model_url_output = gr.HTML(label="model page", height=800)  
    
         image_input.change(fn=save_thumbnail_from_np_array, inputs=[current_model_textbox, image_input])
@@ -467,6 +522,8 @@ def on_ui_tabs():
         save_preset_button.click(fn=save_preset, inputs=[preset_name_textbox, model_generation_data], outputs=[preset_dropdown, output_textbox, model_generation_data])            
         rename_preset_button.click(fn=rename_preset, inputs=[preset_dropdown, preset_name_textbox, model_generation_data], outputs=[preset_dropdown, output_textbox, model_generation_data])
         delete_preset_button.click(fn=delete_preset, inputs=[preset_dropdown, model_generation_data], outputs=[preset_dropdown, preset_name_textbox, output_textbox, model_generation_data])         
+        
+        get_civitai_preset_text.click(fn=get_civitai_preset_sharing_text, inputs=[], outputs=[output_textbox])         
         
         model_generation_data.change(fn = handle_text_change, inputs = [model_generation_data], outputs = [triggerWords], show_progress=False)
         
