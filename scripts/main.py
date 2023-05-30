@@ -229,7 +229,7 @@ def download_model_info():
     model_url, trigger_words, first_image_url = get_model_url_trigger_words_and_first_image_url_from_hash(short_hash)
     full_presets_file =  get_model_presets_from_civitai_model_url(model_url)
     
-    
+    model_thumbnail = None
     if first_image_url:
         model_thumbnail = get_model_thumbnail(first_image_url, short_hash, False, remove_hash_and_whitespace(model_filename, True))
     
