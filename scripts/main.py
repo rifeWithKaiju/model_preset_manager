@@ -17,10 +17,28 @@ from PIL import Image
 from pathlib import Path
 from typing import Any
 
+from modules import sd_models
+
 CIVITAI_MODEL_INFO_BY_HASH_URL = 'https://civitai.com/api/v1/model-versions/by-hash/'
 CIVITAI_MODEL_PAGE_BY_ID_URL = 'https://civitai.com/models/'
 CIVITAI_MODEL_DESCRIPTION_TAG = 'mantine-TypographyStylesProvider-root mantine-dfvxn9'
 CIVITAI_MODEL_DESCRIPTION_PRESET_PREFIX = '###ModelPresets###'
+
+def get_cpkt_dir():
+    cpkt_dir = shared.opts.data.get('cpkt_dir', 'Not found')
+    if cpkt_dir == 'Not found':
+        cpkt_dir = os.path.join("models", "Stable-diffusion")
+    return cpkt_dir
+
+def current_model_filename():
+    current_checkpoint = shared.opts.data.get('sd_model_checkpoint', 'Not found')
+    checkpoint: sd_models.CheckpointInfo
+    checkpoint = sd_models.get_closet_checkpoint_match(current_checkpoint)
+
+    if checkpoint is not None:
+        return checkpoint.filename
+    else:
+        return 'Not found'
 
 def get_model_info_file_path(model_hash):
     current_directory = os.path.dirname(__file__)
@@ -90,7 +108,8 @@ def get_short_hash_from_filename(filename):
     if match:
         return match.group(1)
     filename = remove_hash_and_whitespace(filename)
-    os.path.join("models", "Stable-diffusion", filename)
+    cpkt_dir = get_cpkt_dir()
+    os.path.join(cpkt_dir, filename)
     sha256 = hashlib.sha256()
     with open(filename, 'rb') as f:
         for chunk in iter(lambda: f.read(4096), b''):
@@ -141,11 +160,10 @@ def get_model_presets_from_civitai_model_url(model_url):
                     pass
     return None
 
-
-
-
 def get_thumbnail_path(modelName):
-    return os.path.join("models", "Stable-diffusion", modelName + ".png")
+
+    cpkt_dir = get_cpkt_dir()
+    return os.path.join(cpkt_dir, modelName + ".png")
 
 def download_thumbnail(image_url, modelName):
     thumbnail_path = get_thumbnail_path(modelName)
@@ -226,6 +244,7 @@ def validate_model_info(model_info):
 def download_model_info():
     model_filename = current_model_filename()
     short_hash, model_info = get_model_hash_and_info_from_model_filename(model_filename)
+    print(f"[model_preset_manager]: Downloading model info for model: {short_hash}")
     model_url, trigger_words, first_image_url = get_model_url_trigger_words_and_first_image_url_from_hash(short_hash)
     full_presets_file =  get_model_presets_from_civitai_model_url(model_url)
     
@@ -256,9 +275,6 @@ def model_generation_data_update_return(current_generation_data, preset_name):
     default = default_preset_name == preset_name
     return gr.Textbox.update(label = model_generation_data_label_text(default), value = current_generation_data)
 
-def current_model_filename():
-    return shared.opts.data.get('sd_model_checkpoint', 'Not found')
-
 def retrieve_model_info_from_disk(current_generation_data):
     model_filename = current_model_filename()
 
@@ -276,6 +292,7 @@ def retrieve_model_info_from_disk(current_generation_data):
                 
             global triggerWordChoices
             triggerWordChoices = trigger_words
+            print(f"[model_preset_manager]: Loaded presets from disk for: {short_hash}")
             return model_filename, model_url, model_thumbnail, model_generation_data_update_return(current_generation_data, preset_name), gr.CheckboxGroup.update(choices = trigger_words), gr.Dropdown.update(choices = list(presets.keys()), value = preset_name), preset_name, short_hash
         else:
             presets = model_info.setdefault('presets', {"default": ""})
