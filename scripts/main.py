@@ -73,7 +73,7 @@ def save_model_info(short_hash, model_info):
         json.dump(model_info, file, indent=4)
 
 def get_model_url_trigger_words_and_first_image_url_from_hash(short_hash):
-    response = requests.get(f"{CIVITAI_MODEL_INFO_BY_HASH_URL}{short_hash}")
+    response = requests.get(f"{CIVITAI_MODEL_INFO_BY_HASH_URL}{short_hash}", timeout=30)
     data = response.json()
 
     # The get() method returns None if the key does not exist.
@@ -109,7 +109,7 @@ def remove_hash_and_whitespace(s, remove_extension = False):
 
 def get_model_presets_from_civitai_model_url(model_url):   
     headers = {'User-Agent': 'Mozilla/5.0'}
-    model_page_html = requests.get(model_url, headers=headers).text
+    model_page_html = requests.get(model_url, headers=headers, timeout=30).text
 
     data_start_index = model_page_html.find(CIVITAI_MODEL_DESCRIPTION_TAG)
     if data_start_index == -1:
@@ -151,7 +151,7 @@ def download_thumbnail(image_url, modelName):
     thumbnail_path = get_thumbnail_path(modelName)
     if os.path.exists(thumbnail_path):
         return
-    response = requests.get(image_url)
+    response = requests.get(image_url, timeout=30)
     response.raise_for_status()
 
     # Open the image using PIL and create a thumbnail with max size 300x300
