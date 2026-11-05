@@ -151,7 +151,7 @@ def download_thumbnail(image_url, modelName):
     thumbnail_path = get_thumbnail_path(modelName)
     if os.path.exists(thumbnail_path):
         return
-    response = requests.get(image_url)
+    response = requests.get(image_url, timeout=30)
     response.raise_for_status()
 
     # Open the image using PIL and create a thumbnail with max size 300x300
